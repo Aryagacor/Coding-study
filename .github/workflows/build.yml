@@ -20,37 +20,56 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Detect Project Folder
+      - name: Extract Project ZIP
         run: |
-          if [ -f CODING-STUDY/package.json ]; then
-            echo "PROJECT_DIR=CODING-STUDY" >> $GITHUB_ENV
-          elif [ -f package.json ]; then
-            echo "PROJECT_DIR=." >> $GITHUB_ENV
-          else
-            echo "ERROR: package.json tidak ditemukan"
+          mkdir -p _source
+
+          for file in *.zip; do
+            if [ -f "$file" ]; then
+              echo "Extracting $file"
+              unzip -oq "$file" -d _source
+            fi
+          done
+
+      - name: Detect Project Automatically
+        run: |
+          PROJECT=$(find . -type f -name package.json \
+            -not -path './node_modules/*' \
+            -not -path './_source/node_modules/*' \
+            | head -n 1)
+
+          if [ -z "$PROJECT" ]; then
+            echo "ERROR: package.json tidak ditemukan."
+            echo "Periksa apakah ZIP proyek sudah diupload."
             exit 1
           fi
+
+          DIR=$(dirname "$PROJECT")
+          echo "PROJECT_DIR=$DIR" >> "$GITHUB_ENV"
+          echo "Project ditemukan: $DIR"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Setup Java
+      - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
 
-      - name: Accept Android Licenses
-        run: |
-          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | sort -V | tail -n 1)
-          yes | "$SDKMANAGER" --licenses || true
-
       - name: Install Android SDK
         run: |
-          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | sort -V | tail -n 1)
-          "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" \
+            -name sdkmanager -type f | sort -V | tail -n 1)
+
+          yes | "$SDKMANAGER" --licenses || true
+
+          "$SDKMANAGER" \
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
       - name: Install Dependencies
         run: |
@@ -62,12 +81,12 @@ jobs:
           cd "$PROJECT_DIR"
           npm run build
 
-      - name: Create Android Project
+      - name: Create Android Platform
         run: |
           cd "$PROJECT_DIR"
           npx cap add android
 
-      - name: Sync Capacitor
+      - name: Sync Android
         run: |
           cd "$PROJECT_DIR"
           npx cap sync android
@@ -82,5 +101,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: CODING-STUDY-APK
-          path: '**/android/app/build/outputs/apk/debug/app-debug.apk'
+          path: '**/app/build/outputs/apk/debug/app-debug.apk'
           if-no-files-found: error
