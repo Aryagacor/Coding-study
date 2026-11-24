@@ -16,23 +16,27 @@ jobs:
     name: Build CODING STUDY
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: CODING-STUDY
-
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Detect Project Folder
+        run: |
+          if [ -f CODING-STUDY/package.json ]; then
+            echo "PROJECT_DIR=CODING-STUDY" >> $GITHUB_ENV
+          elif [ -f package.json ]; then
+            echo "PROJECT_DIR=." >> $GITHUB_ENV
+          else
+            echo "ERROR: package.json tidak ditemukan"
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Setup Java 21
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -41,29 +45,36 @@ jobs:
       - name: Accept Android Licenses
         run: |
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | sort -V | tail -n 1)
-          echo "$(dirname "$SDKMANAGER")" >> "$GITHUB_PATH"
           yes | "$SDKMANAGER" --licenses || true
 
-      - name: Install Android SDK Packages
+      - name: Install Android SDK
         run: |
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | sort -V | tail -n 1)
           "$SDKMANAGER" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          cd "$PROJECT_DIR"
+          npm install
 
       - name: Build Web App
-        run: npm run build
+        run: |
+          cd "$PROJECT_DIR"
+          npm run build
 
-      - name: Create Android Platform
-        run: npx cap add android
+      - name: Create Android Project
+        run: |
+          cd "$PROJECT_DIR"
+          npx cap add android
 
       - name: Sync Capacitor
-        run: npx cap sync android
+        run: |
+          cd "$PROJECT_DIR"
+          npx cap sync android
 
       - name: Build APK
         run: |
-          cd android
+          cd "$PROJECT_DIR/android"
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon
 
@@ -71,5 +82,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: CODING-STUDY-APK
-          path: CODING-STUDY/android/app/build/outputs/apk/debug/app-debug.apk
+          path: '**/android/app/build/outputs/apk/debug/app-debug.apk'
           if-no-files-found: error
